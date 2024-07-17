@@ -100,9 +100,9 @@ async function run() {
       res.send({ user, token });
     });
 
-    // aprov users----------------------------------------------------------
+    // aprove users----------------------------------------------------------
     app.put("/approve", async (req, res) => {
-      const phone =await req.body.phone;
+      const phone = await req.body.phone;
       const user = await usersCollection.findOne({ phone });
 
       if (user.role.name === "agent" && user.role.status === "pending") {
@@ -112,8 +112,8 @@ async function run() {
             "role.status": "approved",
           },
         };
-        const result = await usersCollection.updateOne({phone},updateDoc)
-        return res.send({message :"updated", result})
+        const result = await usersCollection.updateOne({ phone }, updateDoc);
+        return res.send({ message: "updated", result });
       }
 
       if (user.role.name === "user" && user.role.status === "pending") {
@@ -123,8 +123,8 @@ async function run() {
             "role.status": "approved",
           },
         };
-        const result = await usersCollection.updateOne({phone},updateDoc)
-        return res.send({message :"updated", result})
+        const result = await usersCollection.updateOne({ phone }, updateDoc);
+        return res.send({ message: "updated", result });
       }
       if (user.role.name === "admin" && user.role.status === "pending") {
         const updateDoc = {
@@ -132,15 +132,14 @@ async function run() {
             "role.status": "approved",
           },
         };
-        const result = await usersCollection.updateOne({phone},updateDoc)
-        return res.send({message :"updated", result})
+        const result = await usersCollection.updateOne({ phone }, updateDoc);
+        return res.send({ message: "updated", result });
       }
 
-        console.log(phone)
-        res.send({phone})
+      console.log(phone);
+      res.send({ phone });
     });
 
-    
     // Transactions ---------------------------------------------------------
     app.post("/transactions", async (req, res) => {
       const info = await req.body;
@@ -158,6 +157,70 @@ async function run() {
 
       res.send({ message: "Request sent", status: 200 });
     });
+
+    // sendMoney ------------------------------------------------------
+    app.put("/send-money", async (req, res) => {
+      const info = await req.body;
+      const sender = await usersCollection.findOne({
+        phone: info.senderNumber,
+      });
+      const reciver = await usersCollection.findOne({
+        phone: info.reciverNumber,
+      });
+
+    
+      const isMatch = bcrypt.compareSync(info.pin, sender.pin);
+      if (!isMatch) {
+        return res.send({ message: "invalid credential", status: 301 });
+      }
+
+      if (info.amount < 50) {
+        return res.send({ message: "lower Amount", status: 300 });
+      }
+
+      if (info.amount >= 100) {
+        const senderDoc = {
+          $inc: { balance: -info.amount - 5 },
+        };
+        const reciverDoc = {
+          $inc: { balance: info.amount },
+        };
+
+        const senderResult = await usersCollection.updateOne(
+          { phone: info.senderNumber },
+          senderDoc
+        );
+
+        const reciverResult = await usersCollection.updateOne(
+          { phone: info.reciverNumber },
+          reciverDoc
+        );
+        return res.send({ message: "success", status: 200 });
+      }
+
+
+      const senderDoc = {
+        $inc: { balance: -info.amount},
+      };
+      const reciverDoc = {
+        $inc: { balance: info.amount },
+      };
+
+      const senderResult = await usersCollection.updateOne(
+        { phone: info.senderNumber },
+        senderDoc
+      );
+
+      const reciverResult = await usersCollection.updateOne(
+        { phone: info.reciverNumber },
+        reciverDoc
+      );
+
+      return res.send({ message: "success", status: 200 });
+
+
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
