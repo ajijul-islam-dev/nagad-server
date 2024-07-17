@@ -2,7 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const bcrypt = require("bcrypt");
 var jwt = require("jsonwebtoken");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, Transaction } = require("mongodb");
 require("dotenv").config();
 
 const app = express();
@@ -168,7 +168,6 @@ async function run() {
         phone: info.reciverNumber,
       });
 
-    
       const isMatch = bcrypt.compareSync(info.pin, sender.pin);
       if (!isMatch) {
         return res.send({ message: "invalid credential", status: 301 });
@@ -195,12 +194,13 @@ async function run() {
           { phone: info.reciverNumber },
           reciverDoc
         );
+        const addToTransaction = await TransCollection.insertOne(info);
+
         return res.send({ message: "success", status: 200 });
       }
 
-
       const senderDoc = {
-        $inc: { balance: -info.amount},
+        $inc: { balance: -info.amount },
       };
       const reciverDoc = {
         $inc: { balance: info.amount },
@@ -216,10 +216,51 @@ async function run() {
         reciverDoc
       );
 
+      const addToTransaction = await TransCollection.insertOne(info);
       return res.send({ message: "success", status: 200 });
-
-
     });
+
+
+    // Cash Out -----------------------------------------------------------
+    app.put("/cash-out", async (req,res)=>{
+        const info = await req.body;
+
+        const user = await usersCollection.findOne({
+            phone: info.userNumber,
+          });
+        const agent= await usersCollection.findOne({
+            phone: info.agentNumber,
+          });
+
+          const isMatch = bcrypt.compareSync(info.pin, user.pin);
+          if (!isMatch) {
+            return res.send({ message: "invalid credential", status: 301 });
+          }
+
+          const isAgent = await agent.role.name === "agent" && agent.role.status === "approved"
+          console.log(isAgent)
+
+          if(!isAgent){
+            return res.send({ message: "invalid Agent Number", status: 301 });
+          }
+
+          const commission = info.amount / 100 * 1.5;
+
+          const userDoc = {
+            $inc : {
+                balance : -info.amount-commission
+            }
+          }
+          const agentDoc = {
+            $inc : {
+                balance : info.amount+commission
+            }
+          }
+          const userResult= await usersCollection.updateOne({phone : info.userNumber},userDoc)
+          const agentResult= await usersCollection.updateOne({phone : info.agentNumber},agentDoc)
+
+          res.send({ message: "succed", status: 200 });
+    })
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
