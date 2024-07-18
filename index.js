@@ -247,7 +247,8 @@ async function run() {
       }
 
       const isAgent =
-        (await agent.role.name) === "agent" && agent.role.status === "approved";
+        (await agent?.role?.name) === "agent" &&
+        agent?.role?.status === "approved";
       console.log(isAgent);
 
       if (!isAgent) {
@@ -255,25 +256,6 @@ async function run() {
       }
 
       const commission = (info.amount / 100) * 1.5;
-
-      const userDoc = {
-        $inc: {
-          balance: -info.amount - commission,
-        },
-      };
-      const agentDoc = {
-        $inc: {
-          balance: info.amount + commission,
-        },
-      };
-      const userResult = await usersCollection.updateOne(
-        { phone: info.senderNumber },
-        userDoc
-      );
-      const agentResult = await usersCollection.updateOne(
-        { phone: info.reciverNumber },
-        agentDoc
-      );
       const addToTransaction = await TransCollection.insertOne({
         ...info,
         fee: commission,
@@ -290,11 +272,12 @@ async function run() {
       });
 
       const isAgent =
-      (await agent?.role?.name) === "agent" && agent?.role?.status === "approved";
+        (await agent?.role?.name) === "agent" &&
+        agent?.role?.status === "approved";
 
-    if (!isAgent) {
-      return res.send({ message: "invalid Agent Number", status: 301 });
-    }
+      if (!isAgent) {
+        return res.send({ message: "invalid Agent Number", status: 301 });
+      }
       const result = await TransCollection.insertOne(info);
       res.send({ message: "succed", status: 200 });
     });
@@ -347,17 +330,40 @@ async function run() {
       }
 
       if (info.type === "cash-out") {
-        const senderDoc = {
+        const commission = (info.amount / 100) * 1.5;
+
+        const userDoc = {
           $inc: {
-            balance: -info.amount,
-          },
-          $set: {
-            "info.status": "approved",
+            balance: -info.amount - commission,
           },
         };
-      }
+        const agentDoc = {
+          $inc: {
+            balance: info.amount + commission,
+          },
+        };
+        const userResult = await usersCollection.updateOne(
+          { phone: info.senderNumber },
+          userDoc
+        );
+        const agentResult = await usersCollection.updateOne(
+          { phone: info.reciverNumber },
+          agentDoc
+        );
 
-      res.send({ message: "succed", status: 200 });
+        const transDoc = {
+          $set: {
+            status: "approved",
+          },
+        };
+        const updateTransaction = await TransCollection.updateOne(
+          { _id: new ObjectId(info._id) },
+          transDoc
+        );
+
+        return res.send({ message: "succed", status: 200 });
+      }
+      res.send({ message: "something went wrong", status: 400 });
     });
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
