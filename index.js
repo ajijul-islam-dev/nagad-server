@@ -37,17 +37,35 @@ async function run() {
     await client.connect();
 
     //  verifyToken -----------------------------------------------------
-    const verifyToken = (req, res, next) => {
+    const verifyToken = async (req, res, next) => {
       const token = req.headers.token;
       if (!token) {
         return res.send("fobidden acces");
       }
 
-      jwt.verify(token, process.env.SECRET_TOKEN, (err, decoded) => {});
+      jwt.verify(token, process.env.SECRET_TOKEN, (err, decoded) => {
+        req.decoded = decoded;
+        if (err) {
+          return res.send({ messagr: "invalid or expired token", err });
+        }
+      });
+      const decoded = req.decoded;
+      if (decoded) {
+        const user = await usersCollection.findOne({ phone: decoded.phone });
+        if (user) {
+          const isValid =
+            (await user.phone) === decoded.phone &&
+            user.role.name === decoded.role;
+          if (!isValid) {
+            return res.send({ message: "forbidden access", status: 403 });
+          }
+          next();
+        }
+      }
     };
 
     // get user --------------------------------------------------------
-    app.get("/user", async (req, res) => {
+    app.get("/user",verifyToken, async (req, res) => {
       const token = req.headers.token;
       if (!token) {
         return res.send({ message: "forbidden access", user: null });
@@ -60,7 +78,7 @@ async function run() {
     });
 
     // get All user -----------------------------------------------------
-    app.get("/users", async (req, res) => {
+    app.get("/users", verifyToken, async (req, res) => {
       const result = await usersCollection.find().toArray();
       res.send(result);
     });
@@ -99,14 +117,18 @@ async function run() {
         return res.send({ message: "invalid credential", status: 401 });
       }
 
-      const token = jwt.sign({ phone: user.phone }, process.env.SECRET_TOKEN, {
-        expiresIn: "1h",
-      });
+      const token = jwt.sign(
+        { phone: user.phone, role: user.role.name },
+        process.env.SECRET_TOKEN,
+        {
+          expiresIn: "1h",
+        }
+      );
       res.send({ user, token });
     });
 
     // aprove users----------------------------------------------------------
-    app.put("/approve", async (req, res) => {
+    app.put("/approve",verifyToken, async (req, res) => {
       const phone = await req.body.phone;
       const user = await usersCollection.findOne({ phone });
 
@@ -145,14 +167,16 @@ async function run() {
     });
 
     // Transactions ---------------------------------------------------------
-    app.get("/transactions", async (req, res) => {
+    app.get("/transactions",verifyToken, async (req, res) => {
       const phone = req.query;
-        const result = await TransCollection.find({$or :[{senderNumber : phone.phone},{reciverNumber : phone.phone}]}).toArray();
-        res.send(result)
+      const result = await TransCollection.find({
+        $or: [{ senderNumber: phone.phone }, { reciverNumber: phone.phone }],
+      }).toArray();
+      res.send(result);
     });
 
     // sendMoney ------------------------------------------------------
-    app.put("/send-money", async (req, res) => {
+    app.put("/send-money",verifyToken, async (req, res) => {
       const info = await req.body;
       const sender = await usersCollection.findOne({
         phone: info.senderNumber,
@@ -219,7 +243,7 @@ async function run() {
     });
 
     // Cash Out -----------------------------------------------------------
-    app.put("/cash-out", async (req, res) => {
+    app.put("/cash-out",verifyToken, async (req, res) => {
       const info = await req.body;
 
       const user = await usersCollection.findOne({
@@ -252,7 +276,7 @@ async function run() {
     });
 
     // cash-in --------------------------------------------------------
-    app.post("/cash-in", async (req, res) => {
+    app.post("/cash-in",verifyToken, async (req, res) => {
       const info = req.body;
 
       const agent = await usersCollection.findOne({
@@ -271,7 +295,7 @@ async function run() {
     });
 
     //  get agent managment req-----------------------------------------
-    app.get("/requests", async (req, res) => {
+    app.get("/requests",verifyToken, async (req, res) => {
       const { phone } = req.query;
       const query = {
         $or: [{ reciverNumber: phone }, { senderNumber: phone }],
@@ -281,7 +305,7 @@ async function run() {
     });
 
     // Accept cash in req ----------------------------------------------
-    app.put("/accept", async (req, res) => {
+    app.put("/accept",verifyToken, async (req, res) => {
       const info = req.body;
 
       if (info.type === "cash-in") {
@@ -354,7 +378,7 @@ async function run() {
     });
 
     // Block --------------------------------------------------
-    app.put("/block", async (req, res) => {
+    app.put("/block",verifyToken, async (req, res) => {
       const id = req.body;
       const result = await usersCollection.updateOne(
         { _id: new ObjectId(id.id) },
@@ -364,7 +388,7 @@ async function run() {
     });
 
     // Unblock --------------------------------------------------
-    app.put("/unBlock", async (req, res) => {
+    app.put("/unBlock",verifyToken, async (req, res) => {
       const id = req.body;
       const result = await usersCollection.updateOne(
         { _id: new ObjectId(id.id) },
@@ -374,7 +398,7 @@ async function run() {
     });
 
     // Search by name----------------------------------------------
-    app.get("/search", async (req, res) => {
+    app.get("/search",verifyToken, async (req, res) => {
       const text = req.query;
       const result = await usersCollection
         .find({ name: { $regex: text.s, $options: "i" } })
@@ -383,7 +407,7 @@ async function run() {
     });
 
     // Search by role name----------------------------------------------
-    app.get("/sort", async (req, res) => {
+    app.get("/sort",verifyToken, async (req, res) => {
       const text = req.query;
       const result = await usersCollection
         .find({ "role.name": text.s })
