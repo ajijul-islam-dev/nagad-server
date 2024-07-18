@@ -141,26 +141,14 @@ async function run() {
         return res.send({ message: "updated", result });
       }
 
-      console.log(phone);
-      res.send({ phone });
+      res.send({ message: "something went worng", status: 400 });
     });
 
     // Transactions ---------------------------------------------------------
-    app.post("/transactions", async (req, res) => {
-      const info = await req.body;
-      const userPhone = info.userNumber;
-      const pin = info.pin;
-
-      const user = await usersCollection.findOne({ phone: userPhone });
-      const isMatch = bcrypt.compareSync(pin, user.pin);
-
-      if (!isMatch) {
-        return res.send({ message: "invalid credential", status: 301 });
-      }
-
-      const result = await TransCollection.insertOne(info);
-
-      res.send({ message: "Request sent", status: 200 });
+    app.get("/transactions", async (req, res) => {
+      const phone = req.query;
+        const result = await TransCollection.find({$or :[{senderNumber : phone.phone},{reciverNumber : phone.phone}]}).toArray();
+        res.send(result)
     });
 
     // sendMoney ------------------------------------------------------
@@ -286,7 +274,6 @@ async function run() {
     app.get("/requests", async (req, res) => {
       const { phone } = req.query;
       const query = {
-        status: "pending",
         $or: [{ reciverNumber: phone }, { senderNumber: phone }],
       };
       const result = await TransCollection.find(query).toArray();
@@ -365,6 +352,45 @@ async function run() {
       }
       res.send({ message: "something went wrong", status: 400 });
     });
+
+    // Block --------------------------------------------------
+    app.put("/block", async (req, res) => {
+      const id = req.body;
+      const result = await usersCollection.updateOne(
+        { _id: new ObjectId(id.id) },
+        { $set: { "role.status": "blocked" } }
+      );
+      res.send(result);
+    });
+
+    // Unblock --------------------------------------------------
+    app.put("/unBlock", async (req, res) => {
+      const id = req.body;
+      const result = await usersCollection.updateOne(
+        { _id: new ObjectId(id.id) },
+        { $set: { "role.status": "approved" } }
+      );
+      res.send(result);
+    });
+
+    // Search by name----------------------------------------------
+    app.get("/search", async (req, res) => {
+      const text = req.query;
+      const result = await usersCollection
+        .find({ name: { $regex: text.s, $options: "i" } })
+        .toArray();
+      res.send(result);
+    });
+
+    // Search by role name----------------------------------------------
+    app.get("/sort", async (req, res) => {
+      const text = req.query;
+      const result = await usersCollection
+        .find({ "role.name": text.s })
+        .toArray();
+      res.send(result);
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
