@@ -185,10 +185,17 @@ async function run() {
         phone: info.reciverNumber,
       });
 
+      if(!reciver){
+        return res.send({ message: "invalid credential", status: 303 });
+
+      }
+
       const isMatch = bcrypt.compareSync(info.pin, sender.pin);
       if (!isMatch) {
         return res.send({ message: "invalid credential", status: 301 });
       }
+
+
 
       if (info.amount < 50) {
         return res.send({ message: "lower Amount", status: 300 });
@@ -264,7 +271,7 @@ async function run() {
       console.log(isAgent);
 
       if (!isAgent) {
-        return res.send({ message: "invalid Agent Number", status: 301 });
+        return res.send({ message: "invalid Agent Number", status: 302 });
       }
 
       const commission = (info.amount / 100) * 1.5;
