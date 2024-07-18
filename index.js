@@ -64,6 +64,10 @@ async function run() {
       }
     };
 
+    // server test ----------------------------------------------------
+    app.get("/", async(req,res)=>{
+        res.send("Nagad data is comming")
+    })
     // get user --------------------------------------------------------
     app.get("/user",verifyToken, async (req, res) => {
       const token = req.headers.token;
